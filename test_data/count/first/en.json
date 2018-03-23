@@ -1,0 +1,19 @@
+{
+    "hello": {
+        "world": "hello, world"
+    },
+    "os": {
+        "win": {
+            "xp": "obsolete",
+            "vista": "don't go there",
+            "7": "better",
+            "8": "oops, i failed it again",
+            "10": "at least stable (except for updates)"
+        }
+    },
+    "whoami": "you are {{whoami}}",
+    "expired": "you have {{count}} {{message}} left",
+    "tyson": {
+        "defeated": "he was defeated by few, but one of them was {{boxer}}"
+    }
+}

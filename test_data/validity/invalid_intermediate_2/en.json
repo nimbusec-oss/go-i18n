@@ -1,0 +1,8 @@
+{
+    "hello": {
+        "world": "welcome to the world of {{alice}}"
+    },
+    "minutes": {
+        "left": "you have minutes left until total destruction}}"
+    }
+}

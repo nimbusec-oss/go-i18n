@@ -1,0 +1,12 @@
+{
+    
+    "hello": "world",
+    "hello": "darling",
+    "hi": "hi, you look {{compliment}} today on {{date}}",
+    "hi": "hi, you look {{insult}} today on {{date}} at {{time}}",
+    "whoami": "you are {whoami}",
+    "expired": "you have {count} {message} left",
+    "tyson": {
+        "defeated": "he was defeated by few, but one of them was {boxer}"
+    }
+}

@@ -1,0 +1,22 @@
+{
+    "hello": {
+        "world": "hello, world"
+    },
+    "c": {
+        "sharp": "good",
+        "hashtag": "bad"
+    },
+    "f": {
+        "sharp": "good", 
+        "hashtag": "bad"
+    },
+    "os": {
+        "win": {
+            "xp": "obsolete",
+            "vista": "don't go there",
+            "7": "better",
+            "8": "oops, i failed it again",
+            "10": "at least stable (except for updates)"
+        }
+    }
+}
