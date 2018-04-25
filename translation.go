@@ -20,6 +20,17 @@ const (
 	Suffix = "}}"
 )
 
+// Translations are a collection of language translations represented by key value structure
+// Upon translating it will attempt to retrieve the target language from a given source function,
+// rolling back to the default language on failure. The translations are loaded during intialization
+// from a defined directory
+type Translations struct {
+	directory       string
+	defaultLanguage Language
+	languageFn      func() string
+	translations    map[Language]Store
+}
+
 // Language is the code abbreviation of language
 type Language string
 
@@ -30,8 +41,16 @@ func (lang Language) Valid() bool {
 		unicode.IsLetter(rune(lang[1]))
 }
 
+// Store is a map where a key maps to a translation
+type Store map[Key]Translation
+
+// Key is a unique identifier for a translation.
+// A Key comprises multiple fragments seperated by a "."
 type Key string
 
+// Append takes a fragment s and appends
+// it to the current key. If the current key
+// is empty, s is the root fragment
 func (k Key) Append(s string) Key {
 	s = strings.Trim(s, ".")
 	if s == "" {
@@ -48,29 +67,23 @@ func (k Key) String() string {
 	return string(k)
 }
 
-type Intermediate string
-
-func (i Intermediate) Format() string {
-	return Prefix + string(i) + Suffix
-}
-
+// Translation defines the translated message
+// for a given key which contains context-dependent
+// intermediates as placeholder
 type Translation struct {
 	Message       string
 	Intermediates []Intermediate
 }
 
-// Store is a map where a key maps to a translation
-type Store map[Key]Translation
+// Intermediate is a named placeholder within
+// a translation which may be replaced by a
+// context-dependent value
+type Intermediate string
 
-// Translations are a collection of language translations represented by key value structure
-// Upon translating it will attempt to retrieve the target language from a given source function,
-// rolling back to the default language on failure. The translations are loaded during intialization
-// from a defined directory
-type Translations struct {
-	directory       string
-	defaultLanguage Language
-	languageFn      func() string
-	translations    map[Language]Store
+// Format returns the intermediate in i18next notation
+// e.g {{hello}}
+func (i Intermediate) Format() string {
+	return Prefix + string(i) + Suffix
 }
 
 // NewTranslations initializes a new translations object
