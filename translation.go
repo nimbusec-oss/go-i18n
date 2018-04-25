@@ -2,6 +2,7 @@ package i18n
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"html"
 	"html/template"
@@ -10,8 +11,6 @@ import (
 	"path/filepath"
 	"strings"
 	"unicode"
-
-	"github.com/pkg/errors"
 )
 
 const (
