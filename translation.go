@@ -27,7 +27,6 @@ const (
 type Translations struct {
 	directory       string
 	defaultLanguage Language
-	languageFn      func() string
 	translations    map[Language]Store
 }
 
@@ -87,11 +86,10 @@ func (i Intermediate) Format() string {
 }
 
 // NewTranslations initializes a new translations object
-func NewTranslations(directory string, defaultLanguage string, languageFn func() string) Translations {
+func NewTranslations(directory string, defaultLanguage string) Translations {
 	return Translations{
 		directory:       directory,
 		defaultLanguage: Language(defaultLanguage),
-		languageFn:      languageFn,
 	}
 }
 
@@ -259,46 +257,49 @@ func createIntermediateLookup(parameter []interface{}) (map[Intermediate]interfa
 	return dict, nil
 }
 
-// Translate returns the appropriate translation for a given key, interpolating
+// GenerateDefaultTranslate returns a translate function for the default language.
+func (trl Translations) GenerateDefaultTranslate() func(k string, params ...interface{}) (template.HTML, error) {
+	return trl.GenerateTranslate(string(trl.defaultLanguage))
+}
+
+// GenerateTranslate returns a translate function for a specific language that translates a given key, interpolating
 // the passed parameter values assuming the intermediates
 // match the parameter keys injectively.
-func (trl Translations) Translate(k string, params ...interface{}) (template.HTML, error) {
-	key := Key(k)
-
-	lookup, err := createIntermediateLookup(params)
-	if err != nil {
-		return "", err
+func (trl Translations) GenerateTranslate(targetLang string) func(k string, params ...interface{}) (template.HTML, error) {
+	lang := Language(targetLang)
+	if !lang.Valid() {
+		lang = trl.defaultLanguage
 	}
 
-	// try to get valid language from sourceFn; otherwise, roll back to default
-	lang := trl.defaultLanguage
+	return func(k string, params ...interface{}) (template.HTML, error) {
+		key := Key(k)
 
-	if trl.languageFn != nil {
-		if targetLang := Language(trl.languageFn()); targetLang.Valid() {
-			lang = targetLang
-		}
-	}
-
-	if _, ok := trl.translations[lang]; !ok {
-		return "", fmt.Errorf("unknown language %q", lang)
-	}
-	if _, ok := trl.translations[lang][key]; !ok {
-		return "", fmt.Errorf("unknown key %q", key)
-	}
-	translation := trl.translations[lang][key]
-	message := translation.Message
-
-	// replace intermediates with passed params
-	for _, intermediate := range translation.Intermediates {
-		if _, ok := lookup[intermediate]; !ok {
-			return "", fmt.Errorf("parameter required for intermediate in translation %q: %q", key, intermediate)
+		lookup, err := createIntermediateLookup(params)
+		if err != nil {
+			return "", err
 		}
 
-		// escape content of intermediates
-		value := html.EscapeString(fmt.Sprintf("%v", lookup[intermediate]))
-		message = strings.Replace(message, intermediate.Format(), value, -1)
-	}
+		if _, ok := trl.translations[lang]; !ok {
+			return "", fmt.Errorf("unknown language %q", lang)
+		}
+		if _, ok := trl.translations[lang][key]; !ok {
+			return "", fmt.Errorf("unknown key %q", key)
+		}
+		translation := trl.translations[lang][key]
+		message := translation.Message
 
-	// interpret message string as plain HTML allowing tags
-	return template.HTML(message), nil
+		// replace intermediates with passed params
+		for _, intermediate := range translation.Intermediates {
+			if _, ok := lookup[intermediate]; !ok {
+				return "", fmt.Errorf("parameter required for intermediate in translation %q: %q", key, intermediate)
+			}
+
+			// escape content of intermediates
+			value := html.EscapeString(fmt.Sprintf("%v", lookup[intermediate]))
+			message = strings.Replace(message, intermediate.Format(), value, -1)
+		}
+
+		// interpret message string as plain HTML allowing tags
+		return template.HTML(message), nil
+	}
 }

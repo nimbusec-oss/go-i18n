@@ -55,7 +55,7 @@ func TestKey(t *testing.T) {
 func TestLoad(t *testing.T) {
 	fn := func(directory string, expected bool) func(t *testing.T) {
 		return func(t *testing.T) {
-			_, err := NewTranslations(directory, "en", nil).Load()
+			_, err := NewTranslations(directory, "en").Load()
 			got := (err == nil)
 
 			if got != expected {
@@ -84,7 +84,7 @@ func TestLoad(t *testing.T) {
 func TestNumberTranslations(t *testing.T) {
 	fn := func(directory string, expected int) func(t *testing.T) {
 		return func(t *testing.T) {
-			translations, err := NewTranslations(directory, "en", nil).Load()
+			translations, err := NewTranslations(directory, "en").Load()
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -103,7 +103,7 @@ func TestNumberTranslations(t *testing.T) {
 func TestNumberIntermediates(t *testing.T) {
 	fn := func(directory string, key string, expected int) func(t *testing.T) {
 		return func(t *testing.T) {
-			translations, err := NewTranslations(directory, "en", nil).Load()
+			translations, err := NewTranslations(directory, "en").Load()
 			if err != nil {
 				t.Fatal(err)
 			}
