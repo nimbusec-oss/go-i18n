@@ -19,12 +19,12 @@ go get github.com/nimbusec-oss/go-i18n
 
 **Load translations** 
 ```
-t, err := i18n.NewTranslations("<dir>", "en", nil).Load()
+t, err := i18n.NewTranslations("<dir>", "en").Load()
 ```
 
 **Add to FuncMap**
 ```
-template.FuncMap{"T":t.Translate,}
+template.FuncMap{"T":t.GenerateDefaultTranslate(),}
 ```
 
 **Use in template**
