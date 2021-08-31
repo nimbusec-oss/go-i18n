@@ -303,3 +303,14 @@ func (trl Translations) GenerateTranslate(targetLang string) func(k string, para
 		return template.HTML(message), nil
 	}
 }
+
+// AvailableLanguages returns a list of available languages
+// that were discovered in the language file directory.
+func (trl Translations) AvailableLanguages() []string {
+	availableLanguages := []string{}
+	for lang := range trl.translations {
+		availableLanguages = append(availableLanguages, string(lang))
+	}
+
+	return availableLanguages
+}

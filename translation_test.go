@@ -129,3 +129,15 @@ func TestNumberIntermediates(t *testing.T) {
 	t.Run("second #3", fn(Count+"second", "expired", 0))
 	t.Run("second #4", fn(Count+"second", "tyson.defeated", 0))
 }
+
+func TestAvailableLanguages(t *testing.T) {
+	translations, err := NewTranslations(Validity+"valid", "en").Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	expected := 1
+	if l := len(translations.AvailableLanguages()); l != expected {
+		t.Fatalf("expected %d and not %d available languages", expected, l)
+	}
+}
