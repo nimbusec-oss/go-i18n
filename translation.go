@@ -123,8 +123,9 @@ func (trl Translations) Load() (Translations, error) {
 
 		_, file := filepath.Split(path)
 
+		_, language, _ := cutLast(strings.TrimSuffix(file, extension), "-")
+		lang := Language(strings.ToLower(language))
 		// allow only 2-letter language code file name
-		lang := Language(strings.ToLower(strings.TrimSuffix(file, extension)))
 		if !lang.Valid() {
 			return fmt.Errorf("invalid file naming scheme %q, allowed are only two letter codes", lang)
 		}
@@ -198,7 +199,14 @@ func (trl Translations) Load() (Translations, error) {
 			return fmt.Errorf("no translations found for %q", lang)
 		}
 
-		trl.translations[lang] = store
+		if _, ok := trl.translations[lang]; ok {
+			for key, value := range store {
+				trl.translations[lang][key] = value
+			}
+		} else {
+			trl.translations[lang] = store
+		}
+
 		return nil
 	})
 	if err != nil {
@@ -314,3 +322,11 @@ func (trl Translations) AvailableLanguages() []string {
 
 	return availableLanguages
 }
+
+func cutLast(s, sep string) (before, after string, found bool) {
+	if i := strings.LastIndex(s, sep); i >= 0 {
+		return s[:i], s[i+len(sep):], true
+	}
+	return "", s, false
+}
+
