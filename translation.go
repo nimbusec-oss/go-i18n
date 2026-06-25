@@ -20,6 +20,11 @@ const (
 	Suffix = "}}"
 )
 
+// TranslationFunc is a type alias for a translation function
+// It takes a translation key and optional parameters and returns the appropriate translation
+// An error is returned if the key cannot be translated
+type TranslationFunc func(k string, params ...any) (template.HTML, error)
+
 // Translations are a collection of language translations represented by key value structure
 // Upon translating it will attempt to retrieve the target language from a given source function,
 // rolling back to the default language on failure. The translations are loaded during intialization
@@ -330,3 +335,10 @@ func cutLast(s, sep string) (before, after string, found bool) {
 	return "", s, false
 }
 
+func T(fn TranslationFunc, language, key string, intermediates ...any) (string, error) {
+	translated, err := fn(key, intermediates...)
+	if err != nil {
+		return "??" + language + "_" + key + "??", err
+	}
+	return string(translated), nil
+}
