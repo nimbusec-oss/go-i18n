@@ -335,10 +335,10 @@ func cutLast(s, sep string) (before, after string, found bool) {
 	return "", s, false
 }
 
-func T(fn TranslationFunc, language, key string, intermediates ...any) (string, error) {
+func T(fn TranslationFunc, key string, intermediates ...any) (string, error) {
 	translated, err := fn(key, intermediates...)
 	if err != nil {
-		return "??" + language + "_" + key + "??", err
+		return "??" + key + "??", err
 	}
 	return string(translated), nil
 }
