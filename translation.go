@@ -20,6 +20,11 @@ const (
 	Suffix = "}}"
 )
 
+// TranslationFunc is a type alias for a translation function
+// It takes a translation key and optional parameters and returns the appropriate translation
+// An error is returned if the key cannot be translated
+type TranslationFunc func(k string, params ...any) (template.HTML, error)
+
 // Translations are a collection of language translations represented by key value structure
 // Upon translating it will attempt to retrieve the target language from a given source function,
 // rolling back to the default language on failure. The translations are loaded during intialization
@@ -135,7 +140,7 @@ func (trl Translations) Load() (Translations, error) {
 			return fmt.Errorf("%v for %q", err, lang)
 		}
 
-		var deserialized map[string]interface{}
+		var deserialized map[string]any
 		err = json.Unmarshal(b, &deserialized)
 		if err != nil {
 			return fmt.Errorf("%v for %q", err, lang)
@@ -144,9 +149,9 @@ func (trl Translations) Load() (Translations, error) {
 		store := make(Store)
 
 		// flatten the nested json objects & combining the key fragments into a complete key string
-		var flatten func(Key, map[string]interface{}) error
+		var flatten func(Key, map[string]any) error
 
-		flatten = func(rootKey Key, data map[string]interface{}) error {
+		flatten = func(rootKey Key, data map[string]any) error {
 			if len(data) == 0 {
 				return fmt.Errorf("invalid translation for %q", rootKey)
 			}
@@ -175,8 +180,8 @@ func (trl Translations) Load() (Translations, error) {
 						Intermediates: intermediates,
 					}
 
-				case map[string]interface{}:
-					err := flatten(rootKey, value.(map[string]interface{}))
+				case map[string]any:
+					err := flatten(rootKey, value.(map[string]any))
 					if err != nil {
 						return err
 					}
@@ -249,11 +254,11 @@ func parseIntermediates(message string) ([]Intermediate, error) {
 // createIntermediateLookup attempts to resolve a list non-typed parameters
 // into a lookup structure putting each odd indexed parameter as key (assuming it to be string)
 // and each even indexed non-typed parameter as value
-func createIntermediateLookup(parameter []interface{}) (map[Intermediate]interface{}, error) {
+func createIntermediateLookup(parameter []any) (map[Intermediate]any, error) {
 	if len(parameter)%2 != 0 {
 		return nil, errors.New("invalid dict call")
 	}
-	dict := make(map[Intermediate]interface{}, len(parameter)/2)
+	dict := make(map[Intermediate]any, len(parameter)/2)
 	for i := 0; i < len(parameter); i += 2 {
 		_, ok := parameter[i].(string)
 		if !ok {
@@ -266,20 +271,20 @@ func createIntermediateLookup(parameter []interface{}) (map[Intermediate]interfa
 }
 
 // GenerateDefaultTranslate returns a translate function for the default language.
-func (trl Translations) GenerateDefaultTranslate() func(k string, params ...interface{}) (template.HTML, error) {
+func (trl Translations) GenerateDefaultTranslate() TranslationFunc {
 	return trl.GenerateTranslate(string(trl.defaultLanguage))
 }
 
 // GenerateTranslate returns a translate function for a specific language that translates a given key, interpolating
 // the passed parameter values assuming the intermediates
 // match the parameter keys injectively.
-func (trl Translations) GenerateTranslate(targetLang string) func(k string, params ...interface{}) (template.HTML, error) {
+func (trl Translations) GenerateTranslate(targetLang string) TranslationFunc {
 	lang := Language(targetLang)
 	if !lang.Valid() {
 		lang = trl.defaultLanguage
 	}
 
-	return func(k string, params ...interface{}) (template.HTML, error) {
+	return func(k string, params ...any) (template.HTML, error) {
 		key := Key(k)
 
 		lookup, err := createIntermediateLookup(params)
@@ -330,3 +335,10 @@ func cutLast(s, sep string) (before, after string, found bool) {
 	return "", s, false
 }
 
+func T(fn TranslationFunc, language, key string, intermediates ...any) (string, error) {
+	translated, err := fn(key, intermediates...)
+	if err != nil {
+		return "??" + language + "_" + key + "??", err
+	}
+	return string(translated), nil
+}
