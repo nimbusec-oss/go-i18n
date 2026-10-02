@@ -14,10 +14,14 @@ import (
 )
 
 const (
-	// Prefix marks the begin of a placeholder being used for i18n interpolation
-	Prefix = "{{"
-	// Suffix marks the end of a placeholder being used for i18n interpolation
-	Suffix = "}}"
+	// IntermediatePrefix marks the begin of a placeholder being used for i18n interpolation
+	IntermediatePrefix = "{{"
+	// IntermediateSuffix marks the end of a placeholder being used for i18n interpolation
+	IntermediateSuffix = "}}"
+	// NestedPrefix marks the opening of nested translation
+	NestedPrefix = "$t("
+	// NestedSuffix marks the end of nested translation
+	NestedSuffix = ")"
 )
 
 // TranslationFunc is a type alias for a translation function
@@ -72,11 +76,18 @@ func (k Key) String() string {
 }
 
 // Translation defines the translated message
-// for a given key which contains context-dependent
-// intermediates as placeholder
+// for a given key which contains context-dependent intermediates as placeholder
+// Nested translations are a string of keys to be resolved by GenerateTranslate
 type Translation struct {
 	Message       string
 	Intermediates []Intermediate
+	Nested        []NestedTranslation
+}
+
+// NestedTranslation represents a reference (key) to another translation.
+type NestedTranslation struct {
+	Key    Key
+	Format string
 }
 
 // Intermediate is a named placeholder within
@@ -86,8 +97,9 @@ type Intermediate string
 
 // Format returns the intermediate in i18next notation
 // e.g {{hello}}
+
 func (i Intermediate) Format() string {
-	return Prefix + string(i) + Suffix
+	return IntermediatePrefix + string(i) + IntermediateSuffix
 }
 
 // NewTranslations initializes a new translations object
@@ -170,7 +182,8 @@ func (trl Translations) Load() (Translations, error) {
 
 					// parse the intermediates (if existing) of message string
 					// for fail-safety
-					intermediates, err := parseIntermediates(message)
+					// create a list of nested translations for recursive lookup
+					intermediates, nested, err := parseIntermediates(message)
 					if err != nil {
 						return fmt.Errorf("%v with key %q", err, rootKey)
 					}
@@ -178,6 +191,7 @@ func (trl Translations) Load() (Translations, error) {
 					store[rootKey] = Translation{
 						Message:       message,
 						Intermediates: intermediates,
+						Nested:        nested,
 					}
 
 				case map[string]any:
@@ -225,30 +239,111 @@ func (trl Translations) Load() (Translations, error) {
 	return trl, nil
 }
 
-// parseIntermediates extracts the intermediates in the given translation message
-// It allows arbitrary names, prohibiting only empty names.
-func parseIntermediates(message string) ([]Intermediate, error) {
+// parseIntermediates extracts intermediates and nested translations from the translation
+// Nested translation references are only parsed here.
+// They are resolved recursively by GenerateTranslate
+
+// This logic and flow is copied from github.com i18n.next, the parser and stack
+// were recieved help from Charles GPT
+
+func parseIntermediates(message string) ([]Intermediate, []NestedTranslation, error) {
 	var intermediates []Intermediate
+	var nested []NestedTranslation
 
-	if strings.Count(message, Prefix) != strings.Count(message, Suffix) {
-		return []Intermediate{}, errors.New("invalid format of intermediates")
+	for i := 0; i < len(message); {
+		switch {
+		case strings.HasPrefix(message[i:], IntermediatePrefix):
+			value, next, err := scanFormat(
+				message,
+				i,
+				IntermediatePrefix,
+				IntermediateSuffix,
+			)
+			if err != nil {
+				return nil, nil, fmt.Errorf(
+					"invalid intermediate: %w",
+					err,
+				)
+			}
+
+			intermediates = append(
+				intermediates,
+				Intermediate(value),
+			)
+
+			i = next
+
+		case strings.HasPrefix(message[i:], NestedPrefix):
+			value, next, err := scanFormat(
+				message,
+				i,
+				NestedPrefix,
+				NestedSuffix,
+			)
+			if err != nil {
+				return nil, nil, fmt.Errorf(
+					"invalid nested translation: %w",
+					err,
+				)
+			}
+
+			rawKey := value
+
+			// We handle quoted and unquoted nested keys
+			//   $t(foo.bar)
+			//   $t('foo.bar')
+			//   $t("foo.bar")
+
+			if len(rawKey) >= 2 {
+				// base case no quotes
+				first := rawKey[0]
+				last := rawKey[len(rawKey)-1]
+				// quoted keys
+				if (first == '\'' && last == '\'') || (first == '"' && last == '"') {
+					rawKey = strings.TrimSpace(rawKey[1 : len(rawKey)-1])
+				}
+			}
+
+			if rawKey == "" {
+				return nil, nil, errors.New(
+					"empty nested translation key",
+				)
+			}
+
+			nested = append(nested, NestedTranslation{
+				Key:    Key(rawKey),
+				Format: message[i:next],
+			})
+
+			i = next
+
+		default:
+			i++
+		}
 	}
 
-	parts := strings.Split(message, Prefix)[1:]
-	for _, part := range parts {
-		i := strings.Index(part, Suffix)
-		if i == -1 {
-			return []Intermediate{}, errors.New("invalid format of intermediates, must end with " + Suffix)
-		}
+	return intermediates, nested, nil
+}
 
-		intermediate := Intermediate(strings.TrimSpace(part[:i]))
-		if intermediate == "" {
-			return []Intermediate{}, errors.New("empty intermediate")
-		}
+func scanFormat(message string, start int, prefix string, suffix string) (value string, next int, err error) {
+	contentStart := start + len(prefix)
 
-		intermediates = append(intermediates, intermediate)
+	offset := strings.Index(message[contentStart:], suffix)
+	if offset == -1 {
+		return "", start, fmt.Errorf(
+			"must end with %q",
+			suffix,
+		)
 	}
-	return intermediates, nil
+
+	end := contentStart + offset
+
+	value = strings.TrimSpace(message[contentStart:end])
+	if value == "" {
+		return "", start, errors.New("empty value")
+	}
+
+	return value, end + len(suffix), nil
 }
 
 // createIntermediateLookup attempts to resolve a list non-typed parameters
@@ -285,35 +380,81 @@ func (trl Translations) GenerateTranslate(targetLang string) TranslationFunc {
 	}
 
 	return func(k string, params ...any) (template.HTML, error) {
-		key := Key(k)
-
 		lookup, err := createIntermediateLookup(params)
 		if err != nil {
 			return "", err
 		}
+		// Using a stack to prevent circular referneces as per i18n.next
+		//   label.one -> $t('label.two')
+		//   label.two -> $t('label.one')
 
-		if _, ok := trl.translations[lang]; !ok {
-			return "", fmt.Errorf("unknown language %q", lang)
-		}
-		if _, ok := trl.translations[lang][key]; !ok {
-			return "", fmt.Errorf("unknown key %q", key)
-		}
-		translation := trl.translations[lang][key]
-		message := translation.Message
+		stack := make(map[Key]bool)
 
-		// replace intermediates with passed params
-		for _, intermediate := range translation.Intermediates {
-			if _, ok := lookup[intermediate]; !ok {
-				return "", fmt.Errorf("parameter required for intermediate in translation %q: %q", key, intermediate)
+		var translate func(key Key) (template.HTML, error)
+
+		translate = func(key Key) (template.HTML, error) {
+			if stack[key] {
+				return "", fmt.Errorf("circular translation reference %q", key)
 			}
 
-			// escape content of intermediates
-			value := html.EscapeString(fmt.Sprintf("%v", lookup[intermediate]))
-			message = strings.Replace(message, intermediate.Format(), value, -1)
+			if _, ok := trl.translations[lang]; !ok {
+				return "", fmt.Errorf("unknown language %q", lang)
+			}
+
+			translation, ok := trl.translations[lang][key]
+			if !ok {
+				return "", fmt.Errorf("unknown key %q", key)
+			}
+
+			stack[key] = true
+			defer delete(stack, key)
+
+			message := translation.Message
+
+			// Replace intermediates with passed params.
+			for _, intermediate := range translation.Intermediates {
+				value, ok := lookup[intermediate]
+				if !ok {
+					return "", fmt.Errorf(
+						"parameter required for intermediate in translation %q: %q",
+						key,
+						intermediate,
+					)
+				}
+
+				// Escape content of intermediates.
+				escapedValue := html.EscapeString(fmt.Sprintf("%v", value))
+				message = strings.Replace(
+					message,
+					intermediate.Format(),
+					escapedValue,
+					1,
+				)
+			}
+
+			// Resolve nested translations.
+			//
+			// Nested translations are resolved after interpolation,
+			// as per github.com i18n.next/src/interpolator.js
+			for _, nested := range translation.Nested {
+				value, err := translate(nested.Key)
+				if err != nil {
+					return "", err
+				}
+
+				message = strings.Replace(
+					message,
+					nested.Format,
+					string(value),
+					1,
+				)
+			}
+
+			// Interpret message string as plain HTML allowing tags.
+			return template.HTML(message), nil
 		}
 
-		// interpret message string as plain HTML allowing tags
-		return template.HTML(message), nil
+		return translate(Key(k))
 	}
 }
 
